@@ -1,14 +1,16 @@
 package me.leejay.jenkins.dateparameter;
 
-import org.joda.time.LocalDateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.time.temporal.TemporalUnit;
 import java.util.Arrays;
 import java.util.List;
 
@@ -21,7 +23,8 @@ public class StringLocalDateValue implements Serializable {
 
     private static final long serialVersionUID = 8295455815421939737L;
 
-    private static final String JAVA_PATTERN = "^LocalDate(Time)?\\.now\\(\\)(\\.(plus|minus)(Seconds|Minutes|Hours|Days|Months|Years)\\([0-9]+\\))*;?$";
+    //private final String JAVA_PATTERN = "^LocalDate(Time)?\\.now\\(\\)(\\.(plus|minus)(Seconds|Minutes|Hours|Days|Months|Years)\\([0-9]+\\))*;?$";
+    private final String JAVA_PATTERN = "^LocalDate(Time)?\\.now\\(\\)(\\.atStartOfDay\\(\\))?(\\.(plus|minus)(Seconds|Minutes|Hours|Days|Months|Years)\\([0-9]+\\))*;?$";
 
     private final String stringLocalDate;
 
@@ -41,10 +44,25 @@ public class StringLocalDateValue implements Serializable {
     }
 
     public boolean isCompletionFormat() {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(stringDateFormat);
         try {
-            DateTimeFormatter formatter = DateTimeFormat.forPattern(stringDateFormat);
-            return LocalDateTime.parse(stringLocalDate, formatter) != null;
-        } catch (IllegalArgumentException e) {
+            LocalDateTime.parse(stringLocalDate, formatter);
+            return true;
+        }
+        catch (DateTimeParseException e)
+        {
+            try
+            {
+                LocalDate.parse(stringLocalDate, formatter);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+        catch (Exception e)
+        {
             return false;
         }
     }
@@ -66,15 +84,22 @@ public class StringLocalDateValue implements Serializable {
             return null;
         }
 
+
         LocalDateTime localDateTime = LocalDateTime.now();
-        for (String code : codes.subList(2, codes.size())) {
+        int i = 2;
+        if (codes.get(i).equals("atStartOfDay()"))
+        {
+            localDateTime = localDateTime.toLocalDate().atStartOfDay();
+            ++i;
+        }
+        for (String code : codes.subList(i, codes.size())) {
             IntegerParamMethod paramMethod = new IntegerParamMethod(code);
             if (paramMethod.getName() == null || paramMethod.getParameter() == null) {
                 return null;
             }
 
             try {
-                Method method = localDateTime.getClass().getMethod(paramMethod.getName(), int.class);
+                Method method = localDateTime.getClass().getMethod(paramMethod.getName(), long.class);
                 localDateTime = (LocalDateTime) method.invoke(localDateTime, paramMethod.getParameter());
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
                 return null;
@@ -90,8 +115,8 @@ public class StringLocalDateValue implements Serializable {
         }
 
         if (isJavaFormat()) {
-            DateTimeFormatter formatter = DateTimeFormat.forPattern(stringDateFormat);
-            return parseJava().toString(formatter);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(stringDateFormat);
+            return parseJava().format(formatter);
         }
 
         return "";
